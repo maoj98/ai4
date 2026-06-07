@@ -54,28 +54,29 @@ export const useRoleStore = defineStore('role', () => {
     const role = roles.value.find((r) => r.id === configRoleId.value);
     if (!role) return [];
 
-    const effectiveIds = new Set(configRoleInheritedPermissionIds.value);
+    const permissionStore = usePermissionStore();
+    const inheritedIds = new Set(configRoleInheritedPermissionIds.value);
     const directIds = new Set(role.permissionIds);
+    const checkedIds = permissionStore.treeState.checkedIds;
+    const indeterminateIds = permissionStore.treeState.indeterminateIds;
 
     function buildTree(nodes: PermissionNode[]): PermissionNode[] {
       return nodes
         .map((node) => {
           const children = buildTree(node.children);
-          const isEffective = effectiveIds.has(node.id);
-          const isDirect = directIds.has(node.id);
-          const isInherited = isEffective && !isDirect;
+          const isInherited = inheritedIds.has(node.id);
+          const isChecked = isInherited || checkedIds.has(node.id);
+          const isIndeterminate = indeterminateIds.has(node.id);
 
-          if (isEffective || children.length > 0) {
-            return {
-              ...node,
-              checked: isEffective,
-              indeterminate: false,
-              inherited: isInherited,
-              inheritedFrom: isInherited ? configRoleId.value || undefined : undefined,
-              children,
-            };
-          }
-          return null;
+          return {
+            ...node,
+            checked: isChecked,
+            indeterminate: isIndeterminate,
+            inherited: isInherited,
+            inheritedFrom: isInherited ? configRoleId.value || undefined : undefined,
+            children,
+            expanded: node.expanded !== false,
+          };
         })
         .filter((n) => n !== null) as PermissionNode[];
     }
@@ -209,6 +210,7 @@ export const useRoleStore = defineStore('role', () => {
     configRoleId.value = roleId;
     const role = roles.value.find((r) => r.id === roleId);
     if (role) {
+      permissionStore.clearAll();
       permissionStore.setCheckedIds(role.permissionIds);
     }
     showPermissionConfig.value = true;
