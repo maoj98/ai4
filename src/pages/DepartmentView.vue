@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Home,
   Shield,
+  X,
 } from 'lucide-vue-next';
 import { useDepartmentStore } from '@/stores/department';
 import { useRoleStore } from '@/stores/role';
@@ -150,6 +151,74 @@ function handleDeleteCancel(): void {
 function canDelete(): boolean {
   if (!selectedDepartment.value) return false;
   return selectedDepartment.value.children.length === 0 && selectedDepartment.value.memberCount === 0;
+}
+
+const formErrors = ref<Record<string, string>>({});
+const isSubmitting = ref(false);
+
+const parentDepartmentName = computed(() => {
+  if (!departmentStore.editingDepartment?.parentId) return '无（根部门）';
+  const parent = findDepartmentById(departmentStore.editingDepartment.parentId, departmentStore.departments);
+  return parent?.name || '未知';
+});
+
+function validateForm(): boolean {
+  formErrors.value = {};
+  const data = departmentStore.editingDepartment;
+
+  if (!data) return false;
+
+  if (!data.name.trim()) {
+    formErrors.value.name = '请输入部门名称';
+  } else if (data.name.length > 50) {
+    formErrors.value.name = '部门名称不能超过50个字符';
+  }
+
+  if (!data.code.trim()) {
+    formErrors.value.code = '请输入部门编码';
+  } else if (!/^[a-zA-Z0-9_-]+$/.test(data.code)) {
+    formErrors.value.code = '部门编码只能包含字母、数字、下划线和中划线';
+  } else if (data.code.length > 30) {
+    formErrors.value.code = '部门编码不能超过30个字符';
+  }
+
+  if (data.leader && data.leader.length > 20) {
+    formErrors.value.leader = '负责人姓名不能超过20个字符';
+  }
+
+  if (data.memberCount < 0) {
+    formErrors.value.memberCount = '成员数量不能为负数';
+  }
+
+  if (data.description && data.description.length > 500) {
+    formErrors.value.description = '部门描述不能超过500个字符';
+  }
+
+  return Object.keys(formErrors.value).length === 0;
+}
+
+async function handleSubmit(): Promise<void> {
+  if (!departmentStore.editingDepartment) return;
+
+  if (!validateForm()) {
+    return;
+  }
+
+  isSubmitting.value = true;
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const success = departmentStore.saveDepartment(departmentStore.editingDepartment);
+    if (success) {
+      formErrors.value = {};
+    }
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+function handleCancel(): void {
+  departmentStore.closeFormModal();
+  formErrors.value = {};
 }
 </script>
 
@@ -431,5 +500,223 @@ function canDelete(): boolean {
         </div>
       </template>
     </ConfirmModal>
+
+    <Teleport to="body">
+      <transition name="modal-overlay" appear>
+        <div
+          v-if="departmentStore.showFormModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            class="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            @click="handleCancel"
+          />
+          <transition name="modal-content" appear>
+            <div
+              v-if="departmentStore.showFormModal && departmentStore.editingDepartment"
+              class="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-lg font-semibold text-gray-900">
+                    {{ departmentStore.formMode === 'add' ? '新增部门' : '编辑部门' }}
+                  </h3>
+                  <button
+                    type="button"
+                    class="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                    @click="handleCancel"
+                  >
+                    <X :size="20" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="px-6 py-5 max-h-[70vh] overflow-y-auto">
+                <div class="space-y-5">
+                  <div v-if="departmentStore.formMode === 'edit'">
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                      上级部门
+                    </label>
+                    <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">
+                      {{ parentDepartmentName }}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                      部门名称
+                      <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                      v-model="departmentStore.editingDepartment.name"
+                      type="text"
+                      :class="[
+                        'w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all',
+                        formErrors.name ? 'border-red-500 bg-red-50' : 'border-gray-300',
+                      ]"
+                      placeholder="请输入部门名称"
+                      maxlength="50"
+                    />
+                    <p v-if="formErrors.name" class="mt-1 text-xs text-red-500">
+                      {{ formErrors.name }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                      部门编码
+                      <span class="text-red-500">*</span>
+                    </label>
+                    <input
+                      v-model="departmentStore.editingDepartment.code"
+                      type="text"
+                      :class="[
+                        'w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all',
+                        formErrors.code ? 'border-red-500 bg-red-50' : 'border-gray-300',
+                      ]"
+                      placeholder="请输入部门编码（如：tech、hr）"
+                      maxlength="30"
+                    />
+                    <p v-if="formErrors.code" class="mt-1 text-xs text-red-500">
+                      {{ formErrors.code }}
+                    </p>
+                    <p class="mt-1 text-xs text-gray-400">
+                      只能包含字母、数字、下划线和中划线
+                    </p>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                      负责人
+                    </label>
+                    <input
+                      v-model="departmentStore.editingDepartment.leader"
+                      type="text"
+                      :class="[
+                        'w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all',
+                        formErrors.leader ? 'border-red-500 bg-red-50' : 'border-gray-300',
+                      ]"
+                      placeholder="请输入负责人姓名"
+                      maxlength="20"
+                    />
+                    <p v-if="formErrors.leader" class="mt-1 text-xs text-red-500">
+                      {{ formErrors.leader }}
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                        成员数量
+                      </label>
+                      <input
+                        v-model.number="departmentStore.editingDepartment.memberCount"
+                        type="number"
+                        min="0"
+                        :class="[
+                          'w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all',
+                          formErrors.memberCount ? 'border-red-500 bg-red-50' : 'border-gray-300',
+                        ]"
+                        placeholder="0"
+                      />
+                      <p v-if="formErrors.memberCount" class="mt-1 text-xs text-red-500">
+                        {{ formErrors.memberCount }}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                        排序
+                      </label>
+                      <input
+                        v-model.number="departmentStore.editingDepartment.order"
+                        type="number"
+                        :class="[
+                          'w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all',
+                          'border-gray-300',
+                        ]"
+                        placeholder="999"
+                      />
+                      <p class="mt-1 text-xs text-gray-400">
+                        数值越小排序越靠前
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                      部门描述
+                    </label>
+                    <textarea
+                      v-model="departmentStore.editingDepartment.description"
+                      :class="[
+                        'w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none',
+                        formErrors.description ? 'border-red-500 bg-red-50' : 'border-gray-300',
+                      ]"
+                      rows="4"
+                      placeholder="请输入部门描述（可选）"
+                      maxlength="500"
+                    />
+                    <div class="flex justify-between mt-1">
+                      <p v-if="formErrors.description" class="text-xs text-red-500">
+                        {{ formErrors.description }}
+                      </p>
+                      <p class="text-xs text-gray-400 ml-auto">
+                        {{ departmentStore.editingDepartment.description?.length || 0 }}/500
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <button
+                  type="button"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  :disabled="isSubmitting"
+                  @click="handleCancel"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="isSubmitting"
+                  @click="handleSubmit"
+                >
+                  <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span v-else>
+                    {{ departmentStore.formMode === 'add' ? '新增' : '保存' }}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.modal-overlay-enter-active,
+.modal-overlay-leave-active {
+  transition: opacity 0.2s ease;
+}
+.modal-overlay-enter-from,
+.modal-overlay-leave-to {
+  opacity: 0;
+}
+
+.modal-content-enter-active,
+.modal-content-leave-active {
+  transition: all 0.2s ease;
+}
+.modal-content-enter-from,
+.modal-content-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(-10px);
+}
+</style>
