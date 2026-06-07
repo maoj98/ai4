@@ -884,13 +884,24 @@ export const initialPermissions: PermissionNode[] = [
   },
 ];
 
+const allPermissionIds: string[] = [];
+function collectAllPermissionIds(nodes: PermissionNode[]): void {
+  for (const node of nodes) {
+    allPermissionIds.push(node.id);
+    if (node.children.length > 0) {
+      collectAllPermissionIds(node.children);
+    }
+  }
+}
+collectAllPermissionIds(initialPermissions);
+
 export const initialRoles: Role[] = [
   {
     id: 'role-1',
     name: '超级管理员',
     code: 'super_admin',
     description: '系统最高权限，拥有所有功能',
-    permissionIds: ['perm-1', 'perm-2-1', 'perm-3', 'perm-4'],
+    permissionIds: [...allPermissionIds],
     departmentIds: ['dept-1'],
     userIds: ['user-1'],
     isSystem: true,

@@ -60,19 +60,23 @@ export const useRoleStore = defineStore('role', () => {
     const checkedIds = permissionStore.treeState.checkedIds;
     const indeterminateIds = permissionStore.treeState.indeterminateIds;
 
+    const isSuperAdmin = role.code === 'super_admin';
+
     function buildTree(nodes: PermissionNode[]): PermissionNode[] {
       return nodes
         .map((node) => {
           const children = buildTree(node.children);
           const isInherited = inheritedIds.has(node.id);
-          const isChecked = isInherited || checkedIds.has(node.id);
-          const isIndeterminate = indeterminateIds.has(node.id);
+          const isChecked = isSuperAdmin || isInherited || checkedIds.has(node.id);
+          const isIndeterminate = !isSuperAdmin && indeterminateIds.has(node.id);
+          const isDisabled = isSuperAdmin || isInherited;
 
           return {
             ...node,
             checked: isChecked,
             indeterminate: isIndeterminate,
             inherited: isInherited,
+            disabled: isDisabled,
             inheritedFrom: isInherited ? configRoleId.value || undefined : undefined,
             children,
             expanded: node.expanded !== false,
@@ -225,6 +229,26 @@ export const useRoleStore = defineStore('role', () => {
   function saveRolePermissions(permissionIds: string[]): boolean {
     try {
       if (!configRoleId.value) return false;
+
+      const role = roles.value.find((r) => r.id === configRoleId.value);
+      if (!role) return false;
+
+      if (role.code === 'super_admin') {
+        appStore.showNotificationMsg('error', '超级管理员权限不可修改');
+        return false;
+      }
+
+      if (role.inheritFromRole) {
+        const parentRole = roles.value.find((r) => r.id === role.inheritFromRole);
+        if (parentRole) {
+          const parentPermissionIds = new Set(getRoleEffectivePermissions(parentRole.id, roles.value, permissions.value).map((p) => p.id));
+          const invalidIds = permissionIds.filter((id) => !parentPermissionIds.has(id));
+          if (invalidIds.length > 0) {
+            appStore.showNotificationMsg('error', `权限超出父角色「${parentRole.name}」范围，无法保存`);
+            return false;
+          }
+        }
+      }
 
       const index = appStore.roles.findIndex((r) => r.id === configRoleId.value);
       if (index === -1) return false;

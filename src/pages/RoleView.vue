@@ -22,11 +22,13 @@ import {
 import type { Role, PermissionNode } from '@/types';
 import { useRoleStore } from '@/stores/role';
 import { usePermissionStore } from '@/stores/permission';
+import { useAppStore } from '@/stores/app';
 import RoleCard from '@/components/business/RoleCard.vue';
 import BatchActionBar from '@/components/common/BatchActionBar.vue';
 import ConfirmModal from '@/components/common/ConfirmModal.vue';
 import RoleSelector from '@/components/business/RoleSelector.vue';
 import TreeCheckbox from '@/components/tree/TreeCheckbox.vue';
+import { flattenTree } from '@/utils/treeUtils';
 
 const roleStore = useRoleStore();
 const permissionStore = usePermissionStore();
@@ -250,6 +252,20 @@ const permissionSearchKeyword = ref('');
 const configRole = computed(() => {
   if (!roleStore.configRoleId) return null;
   return roleStore.roles.find((r) => r.id === roleStore.configRoleId) || null;
+});
+
+const totalPermissionCount = computed(() => {
+  const appStore = useAppStore();
+  const allPermissions = flattenTree(appStore.permissions);
+  return allPermissions.length;
+});
+
+const configRolePermissionCount = computed(() => {
+  if (!configRole.value) return 0;
+  if (configRole.value.code === 'super_admin') {
+    return totalPermissionCount.value;
+  }
+  return permissionStore.checkedPermissionIds.length;
 });
 
 const filteredPermissionTree = computed(() => {
@@ -997,7 +1013,12 @@ onMounted(() => {
 
               <div class="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
                 <div class="text-sm text-gray-500">
-                  已选择 <span class="font-medium text-blue-600">{{ permissionStore.checkedPermissionIds.length }}</span> 项权限
+                  <template v-if="configRole?.code === 'super_admin'">
+                    已选择 <span class="font-medium text-amber-600">{{ configRolePermissionCount }}/{{ totalPermissionCount }}</span> 项全部权限（不可修改）
+                  </template>
+                  <template v-else>
+                    已选择 <span class="font-medium text-blue-600">{{ configRolePermissionCount }}/{{ totalPermissionCount }}</span> 项权限
+                  </template>
                 </div>
                 <div class="flex items-center gap-3">
                   <button

@@ -15,6 +15,8 @@ import {
 } from 'lucide-vue-next';
 import type { Role } from '@/types';
 import { useRoleStore } from '@/stores/role';
+import { useAppStore } from '@/stores/app';
+import { flattenTree } from '@/utils/treeUtils';
 
 interface Props {
   role: Role;
@@ -60,6 +62,23 @@ const inheritFromRoleName = computed(() => {
   const parentRole = roleStore.roles.find((r) => r.id === props.role.inheritFromRole);
   return parentRole?.name || null;
 });
+
+const permissionCount = computed(() => {
+  if (props.role.code === 'super_admin') {
+    const appStore = useAppStore();
+    const allPermissions = flattenTree(appStore.permissions);
+    return allPermissions.length;
+  }
+  return props.role.permissionIds.length;
+});
+
+const totalPermissionCount = computed(() => {
+  const appStore = useAppStore();
+  const allPermissions = flattenTree(appStore.permissions);
+  return allPermissions.length;
+});
+
+const isSuperAdmin = computed(() => props.role.code === 'super_admin');
 
 function handleCardClick(): void {
   if (props.disabled) return;
@@ -193,8 +212,11 @@ function handleConfigure(e: Event): void {
 
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <div class="flex items-center gap-1">
-            <Key :size="14" class="text-purple-500" />
-            <span>{{ role.permissionIds.length }} 权限</span>
+            <Key :size="14" :class="isSuperAdmin ? 'text-amber-500' : 'text-purple-500'" />
+            <span v-if="isSuperAdmin" class="text-amber-600 font-medium">
+              {{ permissionCount }}/{{ totalPermissionCount }} 全部权限
+            </span>
+            <span v-else>{{ permissionCount }} 权限</span>
           </div>
           <div class="flex items-center gap-1">
             <Building2 :size="14" class="text-blue-500" />
