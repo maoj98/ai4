@@ -155,6 +155,37 @@ export const useRoleStore = defineStore('role', () => {
 
   function saveRole(data: Role): boolean {
     try {
+      const trimmedCode = data.code.trim().toLowerCase();
+
+      if (formMode.value === 'add') {
+        if (trimmedCode === 'super_admin') {
+          appStore.showNotificationMsg('error', '超级管理员角色已存在，禁止重复创建');
+          return false;
+        }
+
+        const codeExists = appStore.roles.some(
+          (r) => r.code.toLowerCase() === trimmedCode
+        );
+        if (codeExists) {
+          appStore.showNotificationMsg('error', `角色编码「${data.code}」已存在`);
+          return false;
+        }
+      } else {
+        const codeExists = appStore.roles.some(
+          (r) => r.id !== data.id && r.code.toLowerCase() === trimmedCode
+        );
+        if (codeExists) {
+          appStore.showNotificationMsg('error', `角色编码「${data.code}」已存在`);
+          return false;
+        }
+
+        const existingRole = appStore.roles.find((r) => r.id === data.id);
+        if (existingRole && existingRole.code === 'super_admin' && trimmedCode !== 'super_admin') {
+          appStore.showNotificationMsg('error', '超级管理员角色编码不可修改');
+          return false;
+        }
+      }
+
       data.updatedAt = Date.now();
 
       if (formMode.value === 'add') {

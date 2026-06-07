@@ -311,6 +311,27 @@ function validateRoleForm(): boolean {
     roleFormErrors.value.code = '角色编码只能包含字母、数字、下划线和中划线';
   } else if (data.code.length > 30) {
     roleFormErrors.value.code = '角色编码不能超过30个字符';
+  } else {
+    const trimmedCode = data.code.trim().toLowerCase();
+    if (roleStore.formMode === 'add' && trimmedCode === 'super_admin') {
+      roleFormErrors.value.code = '超级管理员角色已存在，禁止重复创建';
+    } else {
+      const codeExists = roleStore.roles.some(
+        (r) => roleStore.formMode === 'add'
+          ? r.code.toLowerCase() === trimmedCode
+          : r.id !== data.id && r.code.toLowerCase() === trimmedCode
+      );
+      if (codeExists) {
+        roleFormErrors.value.code = `角色编码「${data.code}」已存在`;
+      }
+
+      if (roleStore.formMode === 'edit') {
+        const existingRole = roleStore.roles.find((r) => r.id === data.id);
+        if (existingRole && existingRole.code === 'super_admin' && trimmedCode !== 'super_admin') {
+          roleFormErrors.value.code = '超级管理员角色编码不可修改';
+        }
+      }
+    }
   }
 
   if (data.description && data.description.length > 200) {
@@ -449,7 +470,7 @@ onMounted(() => {
 
       <div
         v-else
-        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-24"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-32 min-h-[500px]"
       >
         <RoleCard
           v-for="role in filteredRoles"
